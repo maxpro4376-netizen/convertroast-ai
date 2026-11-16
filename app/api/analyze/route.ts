@@ -1,12 +1,20 @@
+
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+export const maxDuration = 60;
 
-const MODELS = ["gemini-3.8-flash", "gemini-2.5-flash"];
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 export async function POST(req: Request) {
   try {
+    if (!process.env.GEMINI_API_KEY) {
+      return NextResponse.json(
+        { error: "GEMINI_API_KEY is missing in Vercel Environment Variables." },
+        { status: 500 }
+      );
+    }
+
     const { image, mimeType, targetCustomer } = await req.json();
 
     if (!image) {
@@ -16,11 +24,19 @@ export async function POST(req: Request) {
       );
     }
 
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-flash",
+      generationConfig: {
+        responseMimeType: "application/json",
+        temperature: 0.4,
+      },
+    });
+
     const prompt = `You are a senior Conversion Rate Optimization (CRO) and UI/UX expert. Analyze this landing page screenshot${
       targetCustomer ? ` targeting "${targetCustomer}"` : ""
     }.
 
-Return ONLY valid JSON (no markdown, no backticks) in this exact format:
+Return ONLY valid JSON in this exact structure:
 {
   "overallScore": 74,
   "firstImpression": "One sharp sentence on clarity and visual hierarchy.",
@@ -38,48 +54,24 @@ Return ONLY valid JSON (no markdown, no backticks) in this exact format:
 }
 Keep flaws to the top 3 most impactful points.`;
 
-    const imagePart = {
-      inlineData: {
-        data: image,
-        mimeType: mimeType || "image/jpeg",
-      },
-    };
-
-    let lastError: any = null;
-
-    for (const modelName of MODELS) {
-      try {
-        const model = genAI.getGenerativeModel({
-          model: modelName,
-          generationConfig: {
-            responseMimeType: "application/json",
-            temperature: 0.4,
-          },
-        });
-
-        const result = await model.generateContent([prompt, imagePart]);
-        const text = result.response.text();
-        const parsed = JSON.parse(text);
-
-        return NextResponse.json(parsed);
-      } catch (err: any) {
-        lastError = err;
-        // Agar model busy (503) ya overloaded ho toh aglay model par switch karein
-        continue;
-      }
-    }
-
-    return NextResponse.json(
+    const result = await model.generateContent([
+      prompt,
       {
-        error:
-          lastError?.message ||
-          "AI servers are temporarily busy. Please try again in a few seconds.",
+        inlineData: {
+          data: image,
+          mimeType: mimeType || "image/jpeg",
+        },
       },
-      { status: 503 }
-    );
+    ]);
+
+    const rawText = result.response.text();
+    const cleanedJson = rawText.replace(/```json|```/g, "").trim();
+    const parsed = JSON.parse(cleanedJson);
+
+    return NextResponse.json(parsed);
   } catch (error: any) {
     return NextResponse.json(
-      { error: error.message || "Failed to analyze landing page." },
+      { error: error?.message || "Failed to analyze landing page." },
       { status: 500 }
     );
   }
