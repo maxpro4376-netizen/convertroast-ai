@@ -1,67 +1,85 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
 
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+
+const MODELS = ["gemini-3.8-flash", "gemini-2.5-flash"];
+
 export async function POST(req: Request) {
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
+    const { image, mimeType, targetCustomer } = await req.json();
+
+    if (!image) {
       return NextResponse.json(
-        { error: "GEMINI_API_KEY missing! Check .env.local file and restart server." },
-        { status: 500 }
+        { error: "Please upload a landing page screenshot first." },
+        { status: 400 }
       );
     }
 
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const { imageBase64, mimeType, targetAudience } = await req.json();
+    const prompt = `You are a senior Conversion Rate Optimization (CRO) and UI/UX expert. Analyze this landing page screenshot${
+      targetCustomer ? ` targeting "${targetCustomer}"` : ""
+    }.
 
-    if (!imageBase64) {
-      return NextResponse.json({ error: "Screenshot is required" }, { status: 400 });
+Return ONLY valid JSON (no markdown, no backticks) in this exact format:
+{
+  "overallScore": 74,
+  "firstImpression": "One sharp sentence on clarity and visual hierarchy.",
+  "flaws": [
+    {
+      "issue": "Specific UX or conversion flaw",
+      "fix": "Concrete, actionable fix"
+    }
+  ],
+  "headlineRewrite": {
+    "before": "Current weak headline or hero message",
+    "after": "High-converting, benefit-driven rewrite"
+  },
+  "ctaRewrite": "Stronger button text"
+}
+Keep flaws to the top 3 most impactful points.`;
+
+    const imagePart = {
+      inlineData: {
+        data: image,
+        mimeType: mimeType || "image/jpeg",
+      },
+    };
+
+    let lastError: any = null;
+
+    for (const modelName of MODELS) {
+      try {
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          generationConfig: {
+            responseMimeType: "application/json",
+            temperature: 0.4,
+          },
+        });
+
+        const result = await model.generateContent([prompt, imagePart]);
+        const text = result.response.text();
+        const parsed = JSON.parse(text);
+
+        return NextResponse.json(parsed);
+      } catch (err: any) {
+        lastError = err;
+        // Agar model busy (503) ya overloaded ho toh aglay model par switch karein
+        continue;
+      }
     }
 
-    const model = genAI.getGenerativeModel({
-      model: "gemini-3.8-flash",
-      generationConfig: {
-        responseMimeType: "application/json",
-      },
-    });
-
-    const prompt = `You are an elite Conversion Rate Optimization (CRO) & UI/UX Designer auditing a landing page.
-Target Audience: "${targetAudience || "General Online Customers"}".
-
-Analyze this landing page screenshot and return JSON in this exact structure:
-{
-  "score": 72,
-  "verdict": "One punchy sentence summarizing the overall UX and conversion potential.",
-  "flaws": [
-    { "title": "Flaw 1 Title", "issue": "Why this hurts conversions", "fix": "Exact actionable UI/UX fix" },
-    { "title": "Flaw 2 Title", "issue": "Why this hurts conversions", "fix": "Exact actionable UI/UX fix" },
-    { "title": "Flaw 3 Title", "issue": "Why this hurts conversions", "fix": "Exact actionable UI/UX fix" }
-  ],
-  "copyRewrite": {
-    "headline": "High-converting replacement H1 headline",
-    "subheadline": "Clear, benefit-driven subheadline",
-    "ctaButton": "Action-oriented button text"
-  }
-}`;
-
-    const result = await model.generateContent([
-      prompt,
-      {
-        inlineData: {
-          data: imageBase64,
-          mimeType: mimeType || "image/png",
-        },
-      },
-    ]);
-
-    const responseText = result.response.text();
-    const auditData = JSON.parse(responseText);
-
-    return NextResponse.json(auditData);
-  } catch (error: any) {
-    console.error("Audit Error:", error);
     return NextResponse.json(
-      { error: error?.message || "Failed to analyze landing page." },
+      {
+        error:
+          lastError?.message ||
+          "AI servers are temporarily busy. Please try again in a few seconds.",
+      },
+      { status: 503 }
+    );
+  } catch (error: any) {
+    return NextResponse.json(
+      { error: error.message || "Failed to analyze landing page." },
       { status: 500 }
     );
   }
