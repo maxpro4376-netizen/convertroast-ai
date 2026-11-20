@@ -60,7 +60,7 @@ export default function LandingPageAuditor() {
         const img = new Image();
         img.onload = () => {
           const canvas = document.createElement("canvas");
-          const MAX_WIDTH = 600;
+          const MAX_WIDTH = 520;
           let width = img.width;
           let height = img.height;
 
@@ -74,7 +74,7 @@ export default function LandingPageAuditor() {
           const ctx = canvas.getContext("2d");
           ctx?.drawImage(img, 0, 0, width, height);
 
-          const dataUrl = canvas.toDataURL("image/jpeg", 0.55);
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.5);
           const base64 = dataUrl.split(",")[1];
           resolve({
             base64,
