@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -20,7 +21,6 @@ interface AuditResult {
 const DAILY_LIMIT = 2;
 
 const MODELS = [
-  "gemini-3.8-flash",
   "gemini-3.8-flash",
   "gemini-3.8-flash",
 ];
@@ -60,7 +60,7 @@ export default function LandingPageAuditor() {
         const img = new Image();
         img.onload = () => {
           const canvas = document.createElement("canvas");
-          const MAX_WIDTH = 900;
+          const MAX_WIDTH = 600;
           let width = img.width;
           let height = img.height;
 
@@ -74,7 +74,7 @@ export default function LandingPageAuditor() {
           const ctx = canvas.getContext("2d");
           ctx?.drawImage(img, 0, 0, width, height);
 
-          const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.55);
           const base64 = dataUrl.split(",")[1];
           resolve({
             base64,
@@ -130,27 +130,22 @@ export default function LandingPageAuditor() {
     setError("");
     setResult(null);
 
-    const prompt = `You are a senior Conversion Rate Optimization (CRO) and UI/UX expert. Analyze this landing page screenshot${
-      targetCustomer ? ` targeting "${targetCustomer}"` : ""
-    }.
-
-Return ONLY valid JSON in this exact structure:
+    const prompt = `Senior CRO & UX expert. Audit this landing page screenshot${
+      targetCustomer ? ` for "${targetCustomer}"` : ""
+    }. Return ONLY concise JSON:
 {
   "overallScore": 74,
-  "firstImpression": "One sharp sentence on clarity and visual hierarchy.",
+  "firstImpression": "1 short sentence on clarity & visual hierarchy.",
   "flaws": [
-    {
-      "issue": "Specific UX or conversion flaw",
-      "fix": "Concrete, actionable fix"
-    }
+    {"issue": "Short UX/CRO flaw", "fix": "Short actionable fix"}
   ],
   "headlineRewrite": {
-    "before": "Current weak headline or hero message",
-    "after": "High-converting, benefit-driven rewrite"
+    "before": "Current weak headline",
+    "after": "High-converting rewrite"
   },
-  "ctaRewrite": "Stronger button text"
+  "ctaRewrite": "Stronger CTA button text"
 }
-Keep flaws to the top 3 most impactful points.`;
+Max 3 flaws, keep every field under 15 words.`;
 
     let lastError = "AI servers are busy right now. Please try again in a moment.";
 
@@ -178,7 +173,11 @@ Keep flaws to the top 3 most impactful points.`;
               ],
               generationConfig: {
                 response_mime_type: "application/json",
-                temperature: 0.4,
+                temperature: 0.3,
+                maxOutputTokens: 450,
+                thinkingConfig: {
+                  thinkingBudget: 0,
+                },
               },
             }),
           }
@@ -189,7 +188,7 @@ Keep flaws to the top 3 most impactful points.`;
         if (!res.ok) {
           lastError = data?.error?.message || lastError;
           if (i < MODELS.length - 1) {
-            await sleep(1200 * (i + 1));
+            await sleep(300);
           }
           continue;
         }
@@ -207,10 +206,10 @@ Keep flaws to the top 3 most impactful points.`;
         localStorage.setItem("cr_audit_count", String(newCount));
         setLoading(false);
         return;
-      } catch (err: any) {
-        lastError = err?.message || lastError;
+      } catch (err: unknown) {
+        lastError = err instanceof Error ? err.message : lastError;
         if (i < MODELS.length - 1) {
-          await sleep(1200 * (i + 1));
+          await sleep(300);
         }
         continue;
       }
@@ -289,7 +288,7 @@ Keep flaws to the top 3 most impactful points.`;
                     Click to upload screenshot
                   </p>
                   <p className="text-xs text-slate-500 mt-1">
-                    PNG, JPG, or WebP (Auto-optimized for fast analysis)
+                    PNG, JPG, or WebP (Auto-optimized for instant analysis)
                   </p>
                 </div>
               )}
@@ -361,7 +360,7 @@ Keep flaws to the top 3 most impactful points.`;
                   Analyzing visual hierarchy, copy & conversion triggers...
                 </p>
                 <p className="text-xs text-slate-500">
-                  Usually takes 3–6 seconds
+                  Takes ~2–3 seconds
                 </p>
               </div>
             )}
@@ -493,7 +492,7 @@ Keep flaws to the top 3 most impactful points.`;
                   <li>✓ Priority AI Processing</li>
                 </ul>
               </div>
-            <a
+              <a
                 href="https://convertroast.lemonsqueezy.com/checkout/buy/c1abc126-f850-4e4c-93d9-9e6d373c99d4?discount=0"
                 target="_blank"
                 rel="noopener noreferrer"
@@ -501,7 +500,6 @@ Keep flaws to the top 3 most impactful points.`;
               >
                 Upgrade to Pro – $12/mo
               </a>
-              
             </div>
           </div>
         </section>
