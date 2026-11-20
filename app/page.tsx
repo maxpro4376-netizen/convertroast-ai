@@ -494,11 +494,12 @@ Keep flaws to the top 3 most impactful points.`;
                 </ul>
               </div>
               <a
-                href="https://lemonsqueezy.com"
+                href=https:"//convertroast.lemonsqueezy.com/checkout/buy/c1abc126-f850-4e4c-93d9-9e6d373c99d4"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-center text-sm font-semibold transition"
               >
+              
                 Upgrade to Pro – $12/mo
               </a>
             </div>
