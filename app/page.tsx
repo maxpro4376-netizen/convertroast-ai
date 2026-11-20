@@ -1,5 +1,4 @@
 
-      
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -20,13 +19,13 @@ interface AuditResult {
 
 const DAILY_LIMIT = 2;
 
-// Agar pehla model high demand mein ho toh automatically agla chalega
 const MODELS = [
   "gemini-3.8-flash",
-  "gemini-3.8-flash-lite",
-  "gemini-2.5-flash-lite",
-  "gemini-2.0-flash",
+  "gemini-3.8-flash",
+  "gemini-3.8-flash",
 ];
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export default function LandingPageAuditor() {
   const [imageBase64, setImageBase64] = useState<string>("");
@@ -155,7 +154,8 @@ Keep flaws to the top 3 most impactful points.`;
 
     let lastError = "AI servers are busy right now. Please try again in a moment.";
 
-    for (const modelName of MODELS) {
+    for (let i = 0; i < MODELS.length; i++) {
+      const modelName = MODELS[i];
       try {
         const res = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
@@ -188,6 +188,9 @@ Keep flaws to the top 3 most impactful points.`;
 
         if (!res.ok) {
           lastError = data?.error?.message || lastError;
+          if (i < MODELS.length - 1) {
+            await sleep(1200 * (i + 1));
+          }
           continue;
         }
 
@@ -206,6 +209,9 @@ Keep flaws to the top 3 most impactful points.`;
         return;
       } catch (err: any) {
         lastError = err?.message || lastError;
+        if (i < MODELS.length - 1) {
+          await sleep(1200 * (i + 1));
+        }
         continue;
       }
     }
@@ -342,163 +348,4 @@ Keep flaws to the top 3 most impactful points.`;
                 <p className="text-base font-medium text-slate-400 mb-1">
                   Your UX Audit Report Will Appear Here
                 </p>
-                <p className="text-sm">
-                  Upload a screenshot on the left and click Roast to get started.
-                </p>
-              </div>
-            )}
-
-            {loading && (
-              <div className="text-center py-12 space-y-3">
-                <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto" />
-                <p className="text-slate-300 font-medium">
-                  Analyzing visual hierarchy, copy & conversion triggers...
-                </p>
-                <p className="text-xs text-slate-500">
-                  Usually takes 3–6 seconds
-                </p>
-              </div>
-            )}
-
-            {result && (
-              <div className="space-y-6">
-                <div className="flex items-center justify-between p-4 rounded-xl bg-slate-950 border border-slate-800">
-                  <div>
-                    <p className="text-xs uppercase tracking-wider text-slate-400 font-semibold">
-                      Conversion Score
-                    </p>
-                    <p className="text-sm text-slate-300 mt-1">
-                      {result.firstImpression}
-                    </p>
-                  </div>
-                  <div className="ml-4 shrink-0 w-16 h-16 rounded-2xl bg-indigo-950 border border-indigo-700 flex flex-col items-center justify-center">
-                    <span className="text-2xl font-extrabold text-indigo-400">
-                      {result.overallScore}
-                    </span>
-                    <span className="text-[10px] text-slate-400">/100</span>
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-3">
-                    Top Conversion Killers & Fixes
-                  </h3>
-                  <div className="space-y-3">
-                    {result.flaws?.map((item, idx) => (
-                      <div
-                        key={idx}
-                        className="p-4 rounded-xl bg-slate-950/80 border border-slate-800/90 space-y-1.5"
-                      >
-                        <p className="text-sm font-semibold text-rose-400">
-                          ✕ {item.issue}
-                        </p>
-                        <p className="text-sm text-emerald-300">
-                          ✓ Fix: {item.fix}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="p-4 rounded-xl bg-indigo-950/30 border border-indigo-800/50 space-y-3">
-                  <h3 className="text-sm font-semibold uppercase tracking-wider text-indigo-300">
-                    High-Converting Copy Rewrites
-                  </h3>
-                  <div>
-                    <p className="text-xs text-slate-400">Headline Before:</p>
-                    <p className="text-sm text-slate-300 line-through">
-                      {result.headlineRewrite?.before}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-indigo-400 font-medium">
-                      Headline After (Use This):
-                    </p>
-                    <p className="text-base font-semibold text-white">
-                      &ldquo;{result.headlineRewrite?.after}&rdquo;
-                    </p>
-                  </div>
-                  <div className="pt-2 border-t border-indigo-800/40">
-                    <p className="text-xs text-indigo-400 font-medium">
-                      Stronger CTA Button:
-                    </p>
-                    <span className="inline-block mt-1 px-3 py-1 rounded-lg bg-indigo-600 text-white text-sm font-medium">
-                      {result.ctaRewrite}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <section id="pricing" className="mt-24 pt-12 border-t border-slate-800/80">
-          <div className="text-center max-w-2xl mx-auto mb-12">
-            <h2 className="text-2xl sm:text-4xl font-bold text-white mb-3">
-              Simple, Founder-Friendly Pricing
-            </h2>
-            <p className="text-slate-400 text-sm sm:text-base">
-              Start for free, upgrade when you&apos;re ready to optimize every page.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-            <div className="p-8 rounded-2xl bg-slate-900/60 border border-slate-800 flex flex-col justify-between">
-              <div>
-                <h3 className="text-lg font-semibold">Starter</h3>
-                <div className="text-3xl font-extrabold my-4">
-                  $0{" "}
-                  <span className="text-sm font-normal text-slate-400">
-                    / forever
-                  </span>
-                </div>
-                <ul className="space-y-3 text-sm text-slate-300 mb-8">
-                  <li>✓ 2 Landing Page Audits per day</li>
-                  <li>✓ Conversion Score & First Impression</li>
-                  <li>✓ Top 3 UX & Copy Fixes</li>
-                </ul>
-              </div>
-              <button
-                onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-                className="w-full py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-center text-sm font-medium transition"
-              >
-                Try Free Above
-              </button>
-            </div>
-
-            <div className="p-8 rounded-2xl bg-gradient-to-b from-indigo-950/60 to-slate-900 border border-indigo-600/60 flex flex-col justify-between shadow-xl shadow-indigo-950/30">
-              <div>
-                <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-semibold">Pro Founder</h3>
-                  <span className="text-xs bg-indigo-600 px-2.5 py-0.5 rounded-full font-medium">
-                    Most Popular
-                  </span>
-                </div>
-                <div className="text-3xl font-extrabold my-4">
-                  $12{" "}
-                  <span className="text-sm font-normal text-slate-400">
-                    / month
-                  </span>
-                </div>
-                <ul className="space-y-3 text-sm text-slate-300 mb-8">
-                  <li>✓ Unlimited Full-Page UX Audits</li>
-                  <li>✓ Mobile + Desktop Responsive Checks</li>
-                  <li>✓ Copy-Ready High-Converting Rewrites</li>
-                  <li>✓ Priority AI Processing</li>
-                </ul>
-              </div>
-              <a
-                href="https://lemonsqueezy.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-center text-sm font-semibold transition"
-              >
-                Upgrade to Pro – $12/mo
-              </a>
-            </div>
-          </div>
-        </section>
-      </main>
-    </div>
-  );
-}
+                <p className
