@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect } from "react";
 
-interface AuditResult {
+interface AuditResult { 
   overallScore: number;
   firstImpression: string;
   flaws: {
@@ -20,10 +20,9 @@ interface AuditResult {
 
 const DAILY_LIMIT = 2;
 const MODELS = [
-  "gemini-3.8-flash",
   "gemini-2.5-flash",
   "gemini-2.5-flash-lite",
-  "gemini-3.8-flash-lite",
+  "gemini-3.8-flash",
 ];
 
 
@@ -177,9 +176,7 @@ Max 3 flaws, keep every field under 15 words.`;
                 response_mime_type: "application/json",
                 temperature: 0.3,
                 maxOutputTokens: 450,
-                thinkingConfig: {
-                  thinkingBudget: 0,
-                },
+               
               },
             }),
           }
