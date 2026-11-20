@@ -19,8 +19,6 @@ interface AuditResult {
 }
 
 const DAILY_LIMIT = 2;
-
-
 const MODELS = [
   "gemini-3.8-flash",
   "gemini-2.5-flash",
