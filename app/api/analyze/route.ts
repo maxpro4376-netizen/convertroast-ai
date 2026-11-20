@@ -1,10 +1,11 @@
-
-import { GoogleGenerativeAI } from "@google/generative-ai";
+ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
 
 export const maxDuration = 60;
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function POST(req: Request) {
   try {
@@ -25,7 +26,7 @@ export async function POST(req: Request) {
     }
 
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
+      model: "gemini-3.8-flash",
       generationConfig: {
         responseMimeType: "application/json",
         temperature: 0.4,
@@ -54,21 +55,36 @@ Return ONLY valid JSON in this exact structure:
 }
 Keep flaws to the top 3 most impactful points.`;
 
-    const result = await model.generateContent([
-      prompt,
-      {
-        inlineData: {
-          data: image,
-          mimeType: mimeType || "image/jpeg",
-        },
+    const imagePart = {
+      inlineData: {
+        data: image,
+        mimeType: mimeType || "image/jpeg",
       },
-    ]);
+    };
 
-    const rawText = result.response.text();
-    const cleanedJson = rawText.replace(/```json|```/g, "").trim();
-    const parsed = JSON.parse(cleanedJson);
+    let lastError: any = null;
 
-    return NextResponse.json(parsed);
+    // 3 attempts with short delay to bypass temporary 503 high-demand spikes
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const result = await model.generateContent([prompt, imagePart]);
+        const rawText = result.response.text();
+        const cleanedJson = rawText.replace(/```json|```/g, "").trim();
+        const parsed = JSON.parse(cleanedJson);
+
+        return NextResponse.json(parsed);
+      } catch (err: any) {
+        lastError = err;
+        const msg = err?.message || "";
+        if ((msg.includes("503") || msg.includes("429") || msg.includes("overloaded")) && attempt < 3) {
+          await sleep(1500 * attempt);
+          continue;
+        }
+        throw err;
+      }
+    }
+
+    throw lastError;
   } catch (error: any) {
     return NextResponse.json(
       { error: error?.message || "Failed to analyze landing page." },
