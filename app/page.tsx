@@ -501,7 +501,7 @@ Keep flaws to the top 3 most impactful points.`;
               >
                 Upgrade to Pro – $12/mo
               </a>
-              </a>
+              
             </div>
           </div>
         </section>
