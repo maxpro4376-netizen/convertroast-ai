@@ -53,7 +53,7 @@ export default function LandingPageAuditor() {
         const img = new Image();
         img.onload = () => {
           const canvas = document.createElement("canvas");
-          const MAX_WIDTH = 1200;
+          const MAX_WIDTH = 850;
           let width = img.width;
           let height = img.height;
 
