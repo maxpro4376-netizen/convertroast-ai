@@ -1,22 +1,20 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+
 import { NextResponse } from "next/server";
 
-export const runtime = "edge";
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
-
-const MODELS = ["gemini-3.8-flash", "gemini-3.8-flash-lite", "gemini-2.0-flash"];
+export const maxDuration = 60;
 
 export async function POST(req: Request) {
   try {
-    if (!process.env.GEMINI_API_KEY) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
       return NextResponse.json(
-        { error: "GEMINI_API_KEY is missing in Vercel Environment Variables." },
+        { error: "Vercel mein GEMINI_API_KEY set nahi hai. Settings > Environment Variables check karein." },
         { status: 500 }
       );
     }
 
-    const { image, mimeType, targetCustomer } = await req.json();
+    const body = await req.json();
+    const { image, mimeType, targetCustomer } = body;
 
     if (!image) {
       return NextResponse.json(
@@ -47,48 +45,56 @@ Return ONLY valid JSON in this exact structure:
 }
 Keep flaws to the top 3 most impactful points.`;
 
-    const imagePart = {
-      inlineData: {
-        data: image,
-        mimeType: mimeType || "image/jpeg",
-      },
-    };
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${apiKey}`;
 
-    let lastError: any = null;
-
-    for (const modelName of MODELS) {
-      try {
-        const model = genAI.getGenerativeModel({
-          model: modelName,
-          generationConfig: {
-            responseMimeType: "application/json",
-            temperature: 0.4,
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { text: prompt },
+              {
+                inline_data: {
+                  mime_type: mimeType || "image/jpeg",
+                  data: image,
+                },
+              },
+            ],
           },
-        });
+        ],
+        generationConfig: {
+          response_mime_type: "application/json",
+          temperature: 0.4,
+        },
+      }),
+    });
 
-        const result = await model.generateContent([prompt, imagePart]);
-        const rawText = result.response.text();
-        const cleanedJson = rawText.replace(/```json|```/g, "").trim();
-        const parsed = JSON.parse(cleanedJson);
+    const data = await res.json();
 
-        return NextResponse.json(parsed);
-      } catch (err: any) {
-        lastError = err;
-        continue;
-      }
+    if (!res.ok) {
+      return NextResponse.json(
+        { error: data?.error?.message || `Gemini API Error (${res.status})` },
+        { status: res.status }
+      );
     }
 
-    return NextResponse.json(
-      {
-        error:
-          lastError?.message ||
-          "AI servers are busy right now. Please try again in 5 seconds.",
-      },
-      { status: 503 }
-    );
+    const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!rawText) {
+      return NextResponse.json(
+        { error: "AI se khali jawab aaya. Dubara try karein." },
+        { status: 500 }
+      );
+    }
+
+    const cleanedJson = rawText.replace(/```json|```/g, "").trim();
+    const parsed = JSON.parse(cleanedJson);
+
+    return NextResponse.json(parsed);
   } catch (error: any) {
     return NextResponse.json(
-      { error: error?.message || "Failed to analyze landing page." },
+      { error: error?.message || "Server error while analyzing image." },
       { status: 500 }
     );
   }
