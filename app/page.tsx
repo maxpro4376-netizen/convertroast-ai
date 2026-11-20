@@ -1,3 +1,5 @@
+
+      
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -18,6 +20,14 @@ interface AuditResult {
 
 const DAILY_LIMIT = 2;
 
+// Agar pehla model high demand mein ho toh automatically agla chalega
+const MODELS = [
+  "gemini-3.8-flash",
+  "gemini-3.8-flash-lite",
+  "gemini-2.5-flash-lite",
+  "gemini-2.0-flash",
+];
+
 export default function LandingPageAuditor() {
   const [imageBase64, setImageBase64] = useState<string>("");
   const [mimeType, setMimeType] = useState<string>("image/jpeg");
@@ -28,7 +38,6 @@ export default function LandingPageAuditor() {
   const [result, setResult] = useState<AuditResult | null>(null);
   const [auditsUsed, setAuditsUsed] = useState<number>(0);
 
-  // Daily free usage limit check
   useEffect(() => {
     const today = new Date().toISOString().split("T")[0];
     const savedDate = localStorage.getItem("cr_audit_date");
@@ -43,7 +52,6 @@ export default function LandingPageAuditor() {
     }
   }, []);
 
-  // Fast client-side image compression for instant mobile & desktop uploads
   const compressImage = (
     file: File
   ): Promise<{ base64: string; mimeType: string; preview: string }> => {
@@ -53,7 +61,7 @@ export default function LandingPageAuditor() {
         const img = new Image();
         img.onload = () => {
           const canvas = document.createElement("canvas");
-          const MAX_WIDTH = 850;
+          const MAX_WIDTH = 900;
           let width = img.width;
           let height = img.height;
 
@@ -67,7 +75,7 @@ export default function LandingPageAuditor() {
           const ctx = canvas.getContext("2d");
           ctx?.drawImage(img, 0, 0, width, height);
 
-          const dataUrl = canvas.toDataURL("image/jpeg", 0.75);
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
           const base64 = dataUrl.split(",")[1];
           resolve({
             base64,
@@ -113,44 +121,103 @@ export default function LandingPageAuditor() {
       return;
     }
 
+    const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+    if (!apiKey) {
+      setError("API Key missing: Add NEXT_PUBLIC_GEMINI_API_KEY in Vercel Settings.");
+      return;
+    }
+
     setLoading(true);
     setError("");
     setResult(null);
 
-    try {
-      const response = await fetch("/api/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          image: imageBase64,
-          mimeType,
-          targetCustomer,
-        }),
-      });
+    const prompt = `You are a senior Conversion Rate Optimization (CRO) and UI/UX expert. Analyze this landing page screenshot${
+      targetCustomer ? ` targeting "${targetCustomer}"` : ""
+    }.
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Something went wrong. Please try again.");
-      }
-
-      setResult(data);
-
-      const newCount = auditsUsed + 1;
-      setAuditsUsed(newCount);
-      localStorage.setItem("cr_audit_count", String(newCount));
-    } catch (err: any) {
-      setError(err.message || "Failed to generate UX audit. Please try again.");
-    } finally {
-      setLoading(false);
+Return ONLY valid JSON in this exact structure:
+{
+  "overallScore": 74,
+  "firstImpression": "One sharp sentence on clarity and visual hierarchy.",
+  "flaws": [
+    {
+      "issue": "Specific UX or conversion flaw",
+      "fix": "Concrete, actionable fix"
     }
+  ],
+  "headlineRewrite": {
+    "before": "Current weak headline or hero message",
+    "after": "High-converting, benefit-driven rewrite"
+  },
+  "ctaRewrite": "Stronger button text"
+}
+Keep flaws to the top 3 most impactful points.`;
+
+    let lastError = "AI servers are busy right now. Please try again in a moment.";
+
+    for (const modelName of MODELS) {
+      try {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [
+                {
+                  parts: [
+                    { text: prompt },
+                    {
+                      inline_data: {
+                        mime_type: mimeType,
+                        data: imageBase64,
+                      },
+                    },
+                  ],
+                },
+              ],
+              generationConfig: {
+                response_mime_type: "application/json",
+                temperature: 0.4,
+              },
+            }),
+          }
+        );
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          lastError = data?.error?.message || lastError;
+          continue;
+        }
+
+        const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        if (!rawText) continue;
+
+        const cleanedJson = rawText.replace(/```json|```/g, "").trim();
+        const parsed: AuditResult = JSON.parse(cleanedJson);
+
+        setResult(parsed);
+
+        const newCount = auditsUsed + 1;
+        setAuditsUsed(newCount);
+        localStorage.setItem("cr_audit_count", String(newCount));
+        setLoading(false);
+        return;
+      } catch (err: any) {
+        lastError = err?.message || lastError;
+        continue;
+      }
+    }
+
+    setError(lastError);
+    setLoading(false);
   };
 
   const freeLeft = Math.max(0, DAILY_LIMIT - auditsUsed);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500 selection:text-white">
-      {/* Navbar */}
       <header className="border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -182,7 +249,6 @@ export default function LandingPageAuditor() {
         </div>
       </header>
 
-      {/* Hero Section */}
       <main className="max-w-6xl mx-auto px-4 sm:px-6 pt-12 pb-20">
         <div className="text-center max-w-3xl mx-auto mb-12">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-950/60 border border-indigo-800/60 text-indigo-300 text-xs font-medium mb-4">
@@ -197,9 +263,7 @@ export default function LandingPageAuditor() {
           </p>
         </div>
 
-        {/* Main Workspace */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-          {/* Left Column: Upload & Input */}
           <div className="p-6 sm:p-8 rounded-2xl bg-slate-900/70 border border-slate-800 shadow-xl">
             <label className="block text-sm font-medium text-slate-300 mb-2">
               1. Upload Landing Page Screenshot
@@ -272,7 +336,6 @@ export default function LandingPageAuditor() {
             </button>
           </div>
 
-          {/* Right Column: Audit Report */}
           <div className="p-6 sm:p-8 rounded-2xl bg-slate-900/70 border border-slate-800 min-h-[420px] flex flex-col justify-center">
             {!result && !loading && (
               <div className="text-center text-slate-500 py-12">
@@ -299,7 +362,6 @@ export default function LandingPageAuditor() {
 
             {result && (
               <div className="space-y-6">
-                {/* Score & First Impression */}
                 <div className="flex items-center justify-between p-4 rounded-xl bg-slate-950 border border-slate-800">
                   <div>
                     <p className="text-xs uppercase tracking-wider text-slate-400 font-semibold">
@@ -317,7 +379,6 @@ export default function LandingPageAuditor() {
                   </div>
                 </div>
 
-                {/* Top UX Flaws */}
                 <div>
                   <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-3">
                     Top Conversion Killers & Fixes
@@ -339,7 +400,6 @@ export default function LandingPageAuditor() {
                   </div>
                 </div>
 
-                {/* Copy Rewrites */}
                 <div className="p-4 rounded-xl bg-indigo-950/30 border border-indigo-800/50 space-y-3">
                   <h3 className="text-sm font-semibold uppercase tracking-wider text-indigo-300">
                     High-Converting Copy Rewrites
@@ -372,7 +432,6 @@ export default function LandingPageAuditor() {
           </div>
         </div>
 
-        {/* Pricing Section */}
         <section id="pricing" className="mt-24 pt-12 border-t border-slate-800/80">
           <div className="text-center max-w-2xl mx-auto mb-12">
             <h2 className="text-2xl sm:text-4xl font-bold text-white mb-3">
@@ -384,7 +443,6 @@ export default function LandingPageAuditor() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-            {/* Free Plan */}
             <div className="p-8 rounded-2xl bg-slate-900/60 border border-slate-800 flex flex-col justify-between">
               <div>
                 <h3 className="text-lg font-semibold">Starter</h3>
@@ -408,7 +466,6 @@ export default function LandingPageAuditor() {
               </button>
             </div>
 
-            {/* Pro Plan */}
             <div className="p-8 rounded-2xl bg-gradient-to-b from-indigo-950/60 to-slate-900 border border-indigo-600/60 flex flex-col justify-between shadow-xl shadow-indigo-950/30">
               <div>
                 <div className="flex justify-between items-center">
