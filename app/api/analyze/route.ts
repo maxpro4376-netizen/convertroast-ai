@@ -1,11 +1,11 @@
- import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
 
-export const maxDuration = 60;
+export const runtime = "edge";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const MODELS = ["gemini-3.8-flash", "gemini-3.8-flash-lite", "gemini-2.0-flash"];
 
 export async function POST(req: Request) {
   try {
@@ -24,14 +24,6 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
-
-    const model = genAI.getGenerativeModel({
-      model: "gemini-3.8-flash",
-      generationConfig: {
-        responseMimeType: "application/json",
-        temperature: 0.4,
-      },
-    });
 
     const prompt = `You are a senior Conversion Rate Optimization (CRO) and UI/UX expert. Analyze this landing page screenshot${
       targetCustomer ? ` targeting "${targetCustomer}"` : ""
@@ -64,9 +56,16 @@ Keep flaws to the top 3 most impactful points.`;
 
     let lastError: any = null;
 
-    // 3 attempts with short delay to bypass temporary 503 high-demand spikes
-    for (let attempt = 1; attempt <= 3; attempt++) {
+    for (const modelName of MODELS) {
       try {
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          generationConfig: {
+            responseMimeType: "application/json",
+            temperature: 0.4,
+          },
+        });
+
         const result = await model.generateContent([prompt, imagePart]);
         const rawText = result.response.text();
         const cleanedJson = rawText.replace(/```json|```/g, "").trim();
@@ -75,16 +74,18 @@ Keep flaws to the top 3 most impactful points.`;
         return NextResponse.json(parsed);
       } catch (err: any) {
         lastError = err;
-        const msg = err?.message || "";
-        if ((msg.includes("503") || msg.includes("429") || msg.includes("overloaded")) && attempt < 3) {
-          await sleep(1500 * attempt);
-          continue;
-        }
-        throw err;
+        continue;
       }
     }
 
-    throw lastError;
+    return NextResponse.json(
+      {
+        error:
+          lastError?.message ||
+          "AI servers are busy right now. Please try again in 5 seconds.",
+      },
+      { status: 503 }
+    );
   } catch (error: any) {
     return NextResponse.json(
       { error: error?.message || "Failed to analyze landing page." },
