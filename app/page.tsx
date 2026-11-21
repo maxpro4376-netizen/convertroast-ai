@@ -18,8 +18,9 @@ interface AuditResult {
   ctaRewrite: string;
 }
 
-const DAILY_LIMIT = 2;
+const DAILY_LIMIT = 4;
 const MODELS = [
+  "gemini-2.5-flash-lite",
   "gemini-2.5-flash",
   "gemini-2.5-flash-lite",
   "gemini-3.8-flash",
