@@ -22,33 +22,8 @@ const DAILY_LIMIT = 2;
 const MODELS = [
   "gemini-2.5-flash-lite",
   "gemini-2.5-flash",
+  "gemini-3.8-flash",
 ];
-
-const getInstantFallback = (audience: string): AuditResult => ({
-  overallScore: 68,
-  firstImpression: `Above-the-fold hierarchy is visually clean, but ${
-    audience || "visitors"
-  } need clearer value proof within 3 seconds.`,
-  flaws: [
-    {
-      issue: "Hero headline focuses on general promise rather than measurable outcome.",
-      fix: "Lead with a specific, quantifiable result your customer gets immediately.",
-    },
-    {
-      issue: "Primary CTA lacks urgency and blends with secondary navigation elements.",
-      fix: "Use a high-contrast button color with action-driven micro-copy below it.",
-    },
-    {
-      issue: "Missing immediate social proof (client logos or metrics) above the fold.",
-      fix: "Add a 1-line trust bar directly beneath your primary CTA button.",
-    },
-  ],
-  headlineRewrite: {
-    before: "Current Hero Headline",
-    after: `Turn More ${audience || "Website Visitors"} Into Paying Customers in Minutes`,
-  },
-  ctaRewrite: "Get Started Free →",
-});
 
 export default function LandingPageAuditor() {
   const [imageBase64, setImageBase64] = useState<string>("");
@@ -83,7 +58,7 @@ export default function LandingPageAuditor() {
         const img = new Image();
         img.onload = () => {
           const canvas = document.createElement("canvas");
-          const MAX_WIDTH = 480;
+          const MAX_WIDTH = 520;
           let width = img.width;
           let height = img.height;
 
@@ -97,7 +72,7 @@ export default function LandingPageAuditor() {
           const ctx = canvas.getContext("2d");
           ctx?.drawImage(img, 0, 0, width, height);
 
-          const dataUrl = canvas.toDataURL("image/jpeg", 0.45);
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.5);
           const base64 = dataUrl.split(",")[1];
           resolve({
             base64,
@@ -145,7 +120,7 @@ export default function LandingPageAuditor() {
 
     const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
     if (!apiKey) {
-      setError("API Key missing in Netlify Environment Variables.");
+      setError("API Key missing: Add NEXT_PUBLIC_GEMINI_API_KEY in Netlify Environment Variables.");
       return;
     }
 
@@ -153,27 +128,29 @@ export default function LandingPageAuditor() {
     setError("");
     setResult(null);
 
-    const prompt = `CRO & UX expert. Audit this landing page${
-      targetCustomer ? ` for "${targetCustomer}"` : ""
-    }. Return ONLY concise JSON:
+    const prompt = `You are a brutal CRO & UI/UX expert. Carefully read the exact text, headlines, buttons, layout, and visuals in THIS specific landing page screenshot${
+      targetCustomer ? ` targeting "${targetCustomer}"` : ""
+    }. Give a unique audit specific to this page. Return ONLY valid JSON:
 {
-  "overallScore": 74,
-  "firstImpression": "1 short sentence on clarity & visual hierarchy.",
+  "overallScore": 72,
+  "firstImpression": "1 specific sentence about this exact page's clarity and design.",
   "flaws": [
-    {"issue": "Short UX/CRO flaw", "fix": "Short actionable fix"}
+    {"issue": "Specific flaw visible on this screenshot", "fix": "Concrete actionable fix"}
   ],
   "headlineRewrite": {
-    "before": "Current weak headline",
-    "after": "High-converting rewrite"
+    "before": "Actual headline text seen on this screenshot",
+    "after": "High-converting rewrite tailored to this specific business"
   },
-  "ctaRewrite": "Stronger CTA button text"
+  "ctaRewrite": "Stronger CTA button text for this specific offer"
 }
-Max 3 flaws, under 14 words each.`;
+Provide 3 specific flaws. Keep each field concise (under 18 words).`;
+
+    let lastError = "AI servers are busy right now. Please click Roast again in a few seconds.";
 
     for (let i = 0; i < MODELS.length; i++) {
       const modelName = MODELS[i];
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3500);
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
 
       try {
         const res = await fetch(
@@ -198,18 +175,21 @@ Max 3 flaws, under 14 words each.`;
               ],
               generationConfig: {
                 response_mime_type: "application/json",
-                temperature: 0.3,
-                maxOutputTokens: 380,
+                temperature: 0.4,
+                maxOutputTokens: 500,
               },
             }),
           }
         );
 
         clearTimeout(timeoutId);
-
-        if (!res.ok) continue;
-
         const data = await res.json();
+
+        if (!res.ok) {
+          lastError = data?.error?.message || lastError;
+          continue;
+        }
+
         const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
         if (!rawText) continue;
 
@@ -222,17 +202,18 @@ Max 3 flaws, under 14 words each.`;
         localStorage.setItem("cr_audit_count", String(newCount));
         setLoading(false);
         return;
-      } catch {
+      } catch (err: unknown) {
         clearTimeout(timeoutId);
+        if (err instanceof Error && err.name === "AbortError") {
+          lastError = "Request timed out after 12s. Trying next server...";
+        } else if (err instanceof Error) {
+          lastError = err.message;
+        }
         continue;
       }
     }
 
-    // Guaranteed instant report if Google free servers experience a 503 traffic spike
-    setResult(getInstantFallback(targetCustomer));
-    const newCount = auditsUsed + 1;
-    setAuditsUsed(newCount);
-    localStorage.setItem("cr_audit_count", String(newCount));
+    setError(lastError);
     setLoading(false);
   };
 
@@ -374,9 +355,9 @@ Max 3 flaws, under 14 words each.`;
               <div className="text-center py-12 space-y-3">
                 <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto" />
                 <p className="text-slate-300 font-medium">
-                  Analyzing visual hierarchy, copy & conversion triggers...
+                  Reading your headline, layout & conversion triggers...
                 </p>
-                <p className="text-xs text-slate-500">Takes ~2–3 seconds</p>
+                <p className="text-xs text-slate-500">Takes ~4–6 seconds</p>
               </div>
             )}
 
